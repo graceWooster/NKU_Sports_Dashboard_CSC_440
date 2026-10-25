@@ -23,9 +23,7 @@ print(table_names)
 print("num table names: ", len(table_names))
 
 # create filename based on the title of the page
-page_name = soup.title.get_text()
-page_name = re.sub(r'[^a-zA-Z%\s\r\n\t]', '', page_name).strip()
-page_name = re.sub(r'\s+', '_', page_name).strip()
+page_name = "nkuMensBasketballStats"
 page_name = page_name + "_" + datetime.today().strftime("%Y%m%d-%H%M%S")
 print("page name is:", page_name)
 
