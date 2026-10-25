@@ -1,7 +1,6 @@
 from static_scraper import scrape_static_site
 from playwright_scraper import scrape_dynamic_site
 
-# Example user selection logic
 school_configs = {
     "detroit": {
         "url": "https://detroittitans.com/sports/mens-basketball/stats/2025-26",
@@ -13,10 +12,50 @@ school_configs = {
         "prefix": "nkuMensBasketballStats",
         "type": "static"
     },
+    "gbp": {
+        "url": "https://greenbayphoenix.com/sports/mens-basketball/stats/2025-26",
+        "prefix": "gbpMensBasketballStats",
+        "type": "static"
+    },
     "csu": {
         "url": "https://csuvikings.com/sports/mens-basketball/stats",
         "prefix": "csuMensBasketballStats",
         "type": "static"
+    },
+    "iui": {
+        "url": "https://iuindyjags.com/sports/mens-basketball/stats/2025-2026",
+        "prefix": "iuijMensBasketballStats",
+        "type": "static"
+    },
+    "mke": {
+        "url": "https://mkepanthers.com/sports/mens-basketball/stats/2025-26",
+        "prefix": "mkeMensBasketballStats",
+        "type": "static"
+    },
+    "niu": {
+        "url": "https://niuhuskies.com/sports/mens-basketball/stats",
+        "prefix": "niuMensBasketballStats",
+        "type": "static"
+    },
+    "oakland": {
+        "url": "https://goldengrizzlies.com/sports/mens-basketball/stats",
+        "prefix": "ouMensBasketballStats",
+        "type": "static"
+    },
+    "rmu": {
+        "url": "https://rmucolonials.com/sports/mens-basketball/stats/2025-26?path=mbball",
+        "prefix": "rmuMensBasketballStats",
+        "type": "static"
+    },
+    "wsu": {
+        "url": "https://wsuraiders.com/sports/mens-basketball/stats/2025-26",
+        "prefix": "wsuMensBasketballStats",
+        "type": "dynamic"
+    },
+    "pfu": {
+        "url": "https://gomastodons.com/sports/mens-basketball/stats/2025-26",
+        "prefix": "pfuMensBasketballStats",
+        "type": "dynamic"
     },
     "ysu": {
         "url": "https://ysusports.com/sports/mens-basketball/stats/2025-26",
@@ -25,7 +64,7 @@ school_configs = {
     }
 }
 
-user_choice = "detroit"  # This comes from your UI/selection page
+user_choice = "detroit"
 config = school_configs[user_choice]
 
 if config["type"] == "static":
