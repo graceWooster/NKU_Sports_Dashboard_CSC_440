@@ -1,5 +1,5 @@
 from static_scraper import scrape_static_site
-from playwright_scraper import scrape_dynamic_site
+from Scraping.playwright_scraper import scrape_dynamic_site
 
 school_configs = {
     "detroit": {
