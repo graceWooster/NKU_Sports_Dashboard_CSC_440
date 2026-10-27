@@ -1,5 +1,12 @@
-from static_scraper import scrape_static_site
-from Scraping.playwright_scraper import scrape_dynamic_site
+import argparse
+from pathlib import Path
+
+if __package__:
+    from .static_scraper import scrape_static_site
+else:
+    from static_scraper import scrape_static_site
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 school_configs = {
     "detroit": {
@@ -64,10 +71,31 @@ school_configs = {
     }
 }
 
-user_choice = "detroit"
-config = school_configs[user_choice]
 
-if config["type"] == "static":
-    scrape_static_site(config["url"], config["prefix"])
-else:
-    scrape_dynamic_site(config["url"], config["prefix"])
+def main():
+    parser = argparse.ArgumentParser(
+        description="Scrape a configured Horizon League men's basketball stats page."
+    )
+    parser.add_argument(
+        "school",
+        choices=school_configs,
+        nargs="?",
+        default="detroit",
+        help="School to scrape (default: detroit)",
+    )
+    args = parser.parse_args()
+    config = school_configs[args.school]
+    output_path = BASE_DIR / f"{args.school}_stats.xlsx"
+
+    if config["type"] == "static":
+        scrape_static_site(config["url"], config["prefix"], output_path)
+    else:
+        if __package__:
+            from .playwright_scraper import scrape_dynamic_site
+        else:
+            from playwright_scraper import scrape_dynamic_site
+        scrape_dynamic_site(config["url"], config["prefix"])
+
+
+if __name__ == "__main__":
+    main()

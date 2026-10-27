@@ -1,50 +1,211 @@
-
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { getPlayers } from './api'
+import { getPlayers, getTeamStats } from './api'
+
+const PLAYER_STATS = [
+  { key: 'games_played', label: 'Games' },
+  { key: 'minutes', label: 'Minutes' },
+  { key: 'field_goal_percentage', label: 'FG%' },
+  { key: 'three_point_percentage', label: '3PT%' },
+  { key: 'free_throw_percentage', label: 'FT%' },
+  { key: 'offensive_rebounds', label: 'Off. rebounds' },
+  { key: 'defensive_rebounds', label: 'Def. rebounds' },
+  { key: 'rebounds', label: 'Rebounds' },
+  { key: 'assists', label: 'Assists' },
+  { key: 'steals', label: 'Steals' },
+  { key: 'blocks', label: 'Blocks' },
+  { key: 'points', label: 'Points' },
+]
+
+const EMPTY_PLAYERS = []
+
+const LEADERS = [
+  { key: 'points', label: 'Scoring leader', unit: 'PTS' },
+  { key: 'rebounds', label: 'Rebounding leader', unit: 'REB' },
+  { key: 'assists', label: 'Assist leader', unit: 'AST' },
+]
+
+const SCHOOLS = [
+  { id: 'detroit', name: 'Detroit Mercy', dataAvailable: true },
+  { id: 'nku', name: 'Northern Kentucky', dataAvailable: true },
+  { id: 'gbp', name: 'Green Bay' },
+  { id: 'csu', name: 'Cleveland State' },
+  { id: 'iui', name: 'IU Indianapolis' },
+  { id: 'mke', name: 'Milwaukee' },
+  { id: 'niu', name: 'Northern Illinois' },
+  { id: 'oakland', name: 'Oakland' },
+  { id: 'rmu', name: 'Robert Morris' },
+  { id: 'wsu', name: 'Wright State' },
+  { id: 'pfu', name: 'Purdue Fort Wayne' },
+  { id: 'ysu', name: 'Youngstown State' },
+]
+
+function formatStat(value, key) {
+  if (value === null || value === undefined || value === '') {
+    return '—'
+  }
+
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '—'
+  }
+
+  if (key.endsWith('_percentage')) {
+    return `${(numericValue * 100).toFixed(1)}%`
+  }
+
+  return Number.isInteger(numericValue)
+    ? String(numericValue)
+    : numericValue.toFixed(1)
+}
 
 function App() {
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [selectedSchoolId, setSelectedSchoolId] = useState('nku')
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [apiPlayers, setApiPlayers] = useState([])
-  const [apiError, setApiError] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+  const [playerData, setPlayerData] = useState({
+    schoolId: 'nku',
+    players: [],
+    error: '',
+    loading: true,
+  })
+  const [teamData, setTeamData] = useState({
+    schoolId: 'nku',
+    stats: null,
+    error: '',
+    loading: true,
+  })
+  const [playerSearch, setPlayerSearch] = useState('')
+  const [minimumGames, setMinimumGames] = useState('0')
+  const [sortKey, setSortKey] = useState('points')
+  const [sortDirection, setSortDirection] = useState('desc')
+  const [comparisonNumbers, setComparisonNumbers] = useState(['', ''])
 
-  const players = apiPlayers
+  const selectedSchool = SCHOOLS.find(
+    (school) => school.id === selectedSchoolId,
+  )
+  const players = playerData.schoolId === selectedSchoolId
+    ? playerData.players
+    : EMPTY_PLAYERS
+  const apiError = playerData.schoolId === selectedSchoolId
+    ? playerData.error
+    : ''
+  const isLoading = selectedSchool.dataAvailable &&
+    (playerData.schoolId !== selectedSchoolId || playerData.loading)
+  const teamStats = teamData.schoolId === selectedSchoolId
+    ? teamData.stats
+    : null
+  const teamStatsError = teamData.schoolId === selectedSchoolId
+    ? teamData.error
+    : ''
+  const isTeamStatsLoading = selectedSchool.dataAvailable &&
+    (teamData.schoolId !== selectedSchoolId || teamData.loading)
+  const filteredPlayers = useMemo(() => {
+    const query = playerSearch.trim().toLocaleLowerCase()
+    return players
+      .filter((player) => {
+        const matchesSearch =
+          !query ||
+          String(player.name ?? '').toLocaleLowerCase().includes(query) ||
+          String(player.number ?? '').includes(query)
+        const matchesGames =
+          Number(player.games_played ?? 0) >= Number(minimumGames)
+        return matchesSearch && matchesGames
+      })
+      .sort((a, b) => {
+        const aValue = a[sortKey]
+        const bValue = b[sortKey]
+        const comparison =
+          sortKey === 'name'
+            ? String(aValue ?? '').localeCompare(String(bValue ?? ''))
+            : Number(aValue ?? 0) - Number(bValue ?? 0)
+        return sortDirection === 'asc' ? comparison : -comparison
+      })
+  }, [players, playerSearch, minimumGames, sortKey, sortDirection])
+
+  const comparisonPlayers = comparisonNumbers.map(
+    (number) => players.find((player) => String(player.number) === number) ?? null,
+  )
 
   useEffect(() => {
-    getPlayers()
-      .then((data) => {
-        console.log('Players received from Django:', data)
+    const controller = new AbortController()
 
+    if (!selectedSchool.dataAvailable) {
+      return () => controller.abort()
+    }
+
+    getPlayers(selectedSchoolId, { signal: controller.signal })
+      .then((data) => {
         if (!Array.isArray(data)) {
           throw new Error('Unexpected data format from the server')
         }
 
-        setApiPlayers(data)
-        setApiError('')
+        setPlayerData({
+          schoolId: selectedSchoolId,
+          players: data,
+          error: '',
+          loading: false,
+        })
       })
       .catch((error) => {
+        if (controller.signal.aborted) {
+          return
+        }
         console.error('API error:', error)
-        setApiError(error.message)
+        setPlayerData({
+          schoolId: selectedSchoolId,
+          players: [],
+          error: error.message,
+          loading: false,
+        })
       })
-      .finally(() => {
-        setIsLoading(false)
+
+    getTeamStats(selectedSchoolId, { signal: controller.signal })
+      .then((data) => {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+          throw new Error('Unexpected team statistics format from the server')
+        }
+
+        setTeamData({
+          schoolId: selectedSchoolId,
+          stats: data,
+          error: '',
+          loading: false,
+        })
       })
-  }, [])
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return
+        }
+        console.error('Team statistics API error:', error)
+        setTeamData({
+          schoolId: selectedSchoolId,
+          stats: null,
+          error: error.message,
+          loading: false,
+        })
+      })
+
+    return () => controller.abort()
+  }, [selectedSchool.dataAvailable, selectedSchoolId])
 
   const handlePageChange = (page) => {
     setCurrentPage(page)
     setSelectedPlayer(null)
   }
 
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDirection(key === 'name' ? 'asc' : 'desc')
+    }
+  }
+
   const renderPlayerList = () => {
     if (isLoading) {
-      return (
-        <p className="sidebar-description">
-          Loading players...
-        </p>
-      )
+      return <p className="sidebar-description">Loading players...</p>
     }
 
     if (apiError) {
@@ -56,11 +217,7 @@ function App() {
     }
 
     if (players.length === 0) {
-      return (
-        <p className="sidebar-description">
-          No player data available yet.
-        </p>
-      )
+      return <p className="sidebar-description">No player data available yet.</p>
     }
 
     return players.map((player, index) => (
@@ -71,13 +228,10 @@ function App() {
         }`}
         onClick={() => setSelectedPlayer(player)}
       >
-        <span className="player-number">
-          {player.number ?? '—'}
-        </span>
-
+        <span className="player-number">{player.number ?? '—'}</span>
         <span className="player-info">
           <strong>{player.name ?? 'Name unavailable'}</strong>
-          <small>{player.position ?? 'Position unavailable'}</small>
+          <small>{player.games_played ?? '—'} games played</small>
         </span>
       </button>
     ))
@@ -87,10 +241,9 @@ function App() {
     if (!selectedPlayer) {
       return (
         <div className="empty-state">
-          <h2>Welcome to the NKU Sports Dashboard</h2>
+          <h2>Welcome to the {selectedSchool.name} dashboard</h2>
           <p>
-            Select a player from the left to view their
-            performance statistics.
+            Select a player from the left to view their performance statistics.
           </p>
         </div>
       )
@@ -102,42 +255,237 @@ function App() {
           <div className="player-avatar">
             {String(selectedPlayer.number ?? '').replace('#', '')}
           </div>
-
           <div>
             <h2>{selectedPlayer.name ?? 'Player details'}</h2>
-            <p>
-              {selectedPlayer.number ?? '—'} ·{' '}
-              {selectedPlayer.position ?? 'Position unavailable'}
-            </p>
+            <p>{selectedPlayer.number ?? '—'} · {selectedPlayer.games_played ?? '—'} games</p>
           </div>
         </div>
 
         <h3>Season Statistics</h3>
+        <div className="stats-grid player-stat-grid">
+          {PLAYER_STATS.map(({ key, label }) => (
+            <div className="stat-card" key={key}>
+              <span>{label}</span>
+              <strong>{formatStat(selectedPlayer[key], key)}</strong>
+            </div>
+          ))}
+        </div>
+        <p className="data-note">Per-game averages and shooting percentages from the season workbook.</p>
+      </>
+    )
+  }
 
+  const renderPlayersPage = () => {
+    if (isLoading) {
+      return <p>Loading players...</p>
+    }
+
+    if (apiError) {
+      return <p role="alert">Unable to load players: {apiError}</p>
+    }
+
+    return (
+      <>
+        <div className="player-controls">
+          <label>
+            Search players
+            <input
+              type="search"
+              placeholder="Name or jersey number"
+              value={playerSearch}
+              onChange={(event) => setPlayerSearch(event.target.value)}
+            />
+          </label>
+          <label>
+            Minimum games played
+            <select
+              value={minimumGames}
+              onChange={(event) => setMinimumGames(event.target.value)}
+            >
+              <option value="0">All players</option>
+              <option value="10">10+ games</option>
+              <option value="20">20+ games</option>
+              <option value="30">30+ games</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="table-scroll">
+          <table className="player-stats-table">
+            <thead>
+              <tr>
+                <th scope="col" aria-sort={sortKey === 'number' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button className="sort-button" onClick={() => handleSort('number')}>#</button>
+                </th>
+                <th scope="col" aria-sort={sortKey === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button className="sort-button" onClick={() => handleSort('name')}>Player</button>
+                </th>
+                {PLAYER_STATS.map(({ key, label }) => (
+                  <th
+                    scope="col"
+                    key={key}
+                    aria-sort={sortKey === key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button className="sort-button" onClick={() => handleSort(key)}>{label}</button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPlayers.map((player, index) => (
+                <tr
+                  key={player.number ?? player.id ?? index}
+                >
+                  <td>{player.number ?? '—'}</td>
+                  <th scope="row">
+                    <button
+                      className="player-name-button"
+                      onClick={() => {
+                        setSelectedPlayer(player)
+                        setCurrentPage('dashboard')
+                      }}
+                    >
+                      {player.name ?? 'Name unavailable'}
+                    </button>
+                  </th>
+                  {PLAYER_STATS.map(({ key }) => (
+                    <td key={key}>{formatStat(player[key], key)}</td>
+                  ))}
+                </tr>
+              ))}
+              {filteredPlayers.length === 0 && (
+                <tr>
+                  <td colSpan={PLAYER_STATS.length + 2}>No players match those filters.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="data-note">Showing {filteredPlayers.length} of {players.length} players. Select a row to open that player's details.</p>
+
+        <section className="comparison-section">
+          <div className="page-heading">
+            <h2>Compare Players</h2>
+            <p>Compare season averages using the available roster statistics.</p>
+          </div>
+          <div className="comparison-selectors">
+            {comparisonNumbers.map((number, index) => (
+              <label key={index}>
+                Player {index + 1}
+                <select
+                  value={number}
+                  onChange={(event) => {
+                    setComparisonNumbers((current) =>
+                      current.map((value, playerIndex) =>
+                        playerIndex === index ? event.target.value : value,
+                      ),
+                    )
+                  }}
+                >
+                  <option value="">Choose a player</option>
+                  {players.map((player) => (
+                    <option key={player.number} value={String(player.number)}>
+                      #{player.number} {player.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          {comparisonPlayers.every(Boolean) ? (
+            <div className="table-scroll">
+              <table className="player-stats-table comparison-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Statistic</th>
+                    {comparisonPlayers.map((player) => (
+                      <th scope="col" key={player.number}>{player.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {PLAYER_STATS.map(({ key, label }) => (
+                    <tr key={key}>
+                      <th scope="row">{label}</th>
+                      {comparisonPlayers.map((player) => (
+                        <td key={player.number}>{formatStat(player[key], key)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="data-note">Choose two players to see their stats side by side.</p>
+          )}
+        </section>
+      </>
+    )
+  }
+
+  const renderStatisticsPage = () => {
+    if (isTeamStatsLoading) {
+      return <p>Loading team statistics...</p>
+    }
+
+    if (teamStatsError) {
+      return <p role="alert">Unable to load team statistics: {teamStatsError}</p>
+    }
+
+    if (!teamStats) {
+      return <p>No team statistics are available.</p>
+    }
+
+    const teamCards = [
+      { key: 'points_per_game', label: 'Points per game' },
+      { key: 'rebounds_per_game', label: 'Rebounds per game' },
+      { key: 'assists_per_game', label: 'Assists per game' },
+      { key: 'field_goal_percentage', label: 'Field goal percentage' },
+      { key: 'three_point_percentage', label: 'Three-point percentage' },
+      { key: 'free_throw_percentage', label: 'Free-throw percentage' },
+    ]
+
+    const leaders = LEADERS.map((leader) => ({
+      ...leader,
+      player: players.reduce((best, player) =>
+        !best || Number(player[leader.key] ?? 0) > Number(best[leader.key] ?? 0)
+          ? player
+          : best,
+      null),
+    }))
+
+    return (
+      <>
         <div className="stats-grid">
-          <div className="stat-card">
-            <span>Points Per Game</span>
-            <strong>{selectedPlayer.points ?? '—'}</strong>
-          </div>
-
-          <div className="stat-card">
-            <span>Rebounds Per Game</span>
-            <strong>{selectedPlayer.rebounds ?? '—'}</strong>
-          </div>
-
-          <div className="stat-card">
-            <span>Assists Per Game</span>
-            <strong>{selectedPlayer.assists ?? '—'}</strong>
-          </div>
+          {teamCards.map(({ key, label }) => (
+            <div className="stat-card" key={key}>
+              <span>{label}</span>
+              <strong>{formatStat(teamStats[key], key)}</strong>
+            </div>
+          ))}
         </div>
-
-        <div className="performance-card">
-          <h3>Performance Overview</h3>
-          <p>
-            Additional player statistics and visualizations
-            will appear here as verified data becomes available.
-          </p>
-        </div>
+        <section className="leaderboard-section">
+          <div className="page-heading">
+            <h2>Player Leaders</h2>
+            <p>Season leaders among players in the workbook.</p>
+          </div>
+          <div className="leaderboard-grid">
+            {leaders.map(({ key, label, player, unit }) => (
+              <article className="leader-card" key={key}>
+                <span>{label}</span>
+                {player ? (
+                  <>
+                    <h3>{player.name}</h3>
+                    <p>#{player.number} · {formatStat(player[key], key)} {unit}</p>
+                  </>
+                ) : (
+                  <p>No player data available.</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+        <p className="data-note">Team averages and player leaders are based on the season statistics in your workbook.</p>
       </>
     )
   }
@@ -147,39 +495,47 @@ function App() {
       <header className="dashboard-header">
         <div className="header-content">
           <div>
-            <h1>NKU Sports Dashboard</h1>
+            <h1>Horizon League Basketball Dashboard</h1>
             <p>Player Statistics &amp; Performance</p>
           </div>
-
-          <div className="header-label">
-            NKU Athletics
+          <div className="header-tools">
+            <label className="school-picker">
+              School
+              <select
+                aria-label="Select a school"
+                value={selectedSchoolId}
+                onChange={(event) => {
+                  setSelectedSchoolId(event.target.value)
+                  setSelectedPlayer(null)
+                }}
+              >
+                {SCHOOLS.map((school) => (
+                  <option key={school.id} value={school.id}>
+                    {school.name}{school.dataAvailable ? ' — data available' : ' — data not available'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="header-label">{selectedSchool.name}</div>
           </div>
         </div>
       </header>
 
       <nav className="dashboard-nav">
         <button
-          className={`nav-button ${
-            currentPage === 'dashboard' ? 'active' : ''
-          }`}
+          className={`nav-button ${currentPage === 'dashboard' ? 'active' : ''}`}
           onClick={() => handlePageChange('dashboard')}
         >
           Dashboard
         </button>
-
         <button
-          className={`nav-button ${
-            currentPage === 'players' ? 'active' : ''
-          }`}
+          className={`nav-button ${currentPage === 'players' ? 'active' : ''}`}
           onClick={() => handlePageChange('players')}
         >
           Players
         </button>
-
         <button
-          className={`nav-button ${
-            currentPage === 'statistics' ? 'active' : ''
-          }`}
+          className={`nav-button ${currentPage === 'statistics' ? 'active' : ''}`}
           onClick={() => handlePageChange('statistics')}
         >
           Statistics
@@ -187,96 +543,42 @@ function App() {
       </nav>
 
       <main className="dashboard-content">
-        {currentPage === 'players' ? (
+        {selectedSchool.dataAvailable !== true ? (
+          <section className="full-page">
+            <div className="school-unavailable" role="status">
+              <h2>{selectedSchool.name} statistics are not available yet</h2>
+              <p>
+                The scraper configuration includes {selectedSchool.name}, but
+                this project currently has statistics data only for Northern
+                Kentucky. Select Northern Kentucky to view the available
+                roster and season stats.
+              </p>
+            </div>
+          </section>
+        ) : currentPage === 'players' ? (
           <section className="full-page">
             <div className="page-heading">
-              <h2>NKU Men's Basketball Players</h2>
-              <p>Roster and player information</p>
+              <h2>{selectedSchool.name} Men's Basketball Players</h2>
+              <p>Search, filter, sort, and compare the available player season stats.</p>
             </div>
-
-            {isLoading ? (
-              <p>Loading players...</p>
-            ) : apiError ? (
-              <p role="alert">
-                Unable to load players. Please try again later.
-              </p>
-            ) : players.length === 0 ? (
-              <p>No player data available yet.</p>
-            ) : (
-              <div className="roster-grid">
-                {players.map((player, index) => (
-                  <button
-                    key={player.number ?? player.id ?? index}
-                    className="roster-card"
-                    onClick={() => {
-                      setSelectedPlayer(player)
-                      setCurrentPage('dashboard')
-                    }}
-                  >
-                    <div className="roster-number">
-                      {player.number ?? '—'}
-                    </div>
-
-                    <div className="roster-info">
-                      <h3>{player.name ?? 'Name unavailable'}</h3>
-                      <p>
-                        {player.position ?? 'Position unavailable'}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+            {renderPlayersPage()}
           </section>
         ) : currentPage === 'statistics' ? (
           <section className="full-page">
             <div className="page-heading">
               <h2>Team Statistics</h2>
-              <p>NKU Men's Basketball statistics</p>
+              <p>{selectedSchool.name} men's basketball season averages and player leaders.</p>
             </div>
-
-            <div className="stats-grid">
-              <div className="stat-card">
-                <span>Points Per Game</span>
-                <strong>—</strong>
-              </div>
-
-              <div className="stat-card">
-                <span>Rebounds Per Game</span>
-                <strong>—</strong>
-              </div>
-
-              <div className="stat-card">
-                <span>Assists Per Game</span>
-                <strong>—</strong>
-              </div>
-            </div>
-
-            <div className="performance-card">
-              <h3>Team Performance</h3>
-              <p>
-                Team statistics will appear here when verified
-                NKU data is available from the backend.
-              </p>
-            </div>
+            {renderStatisticsPage()}
           </section>
         ) : (
           <>
             <aside className="sidebar">
               <h2>Players</h2>
-
-              <p className="sidebar-description">
-                Select a player to view their statistics.
-              </p>
-
-              <div className="player-list">
-                {renderPlayerList()}
-              </div>
+              <p className="sidebar-description">Select a player to view their statistics.</p>
+              <div className="player-list">{renderPlayerList()}</div>
             </aside>
-
-            <section className="main-panel">
-              {renderPlayerDetails()}
-            </section>
+            <section className="main-panel">{renderPlayerDetails()}</section>
           </>
         )}
       </main>

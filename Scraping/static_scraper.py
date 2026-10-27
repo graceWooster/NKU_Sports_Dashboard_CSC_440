@@ -1,32 +1,64 @@
-import requests
-import pandas as pd
 from datetime import datetime
+from io import StringIO
+from pathlib import Path
+
+import pandas as pd
+import requests
 from bs4 import BeautifulSoup
 
-def scrape_static_site(url, filename):
-    response = requests.get(url)
-    print("Status code:", response.status_code)
 
-    # turns the request into html
+def _sheet_name(name, used_names):
+    cleaned = name.replace("/", "-").replace("\\", "-")
+    cleaned = cleaned[:31] or "Stats"
+    candidate = cleaned
+    suffix = 2
+
+    while candidate in used_names:
+        ending = f" ({suffix})"
+        candidate = f"{cleaned[:31 - len(ending)]}{ending}"
+        suffix += 1
+
+    used_names.add(candidate)
+    return candidate
+
+
+def scrape_static_site(url, filename, output_path=None):
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+
     soup = BeautifulSoup(response.content, "html.parser")
-    tables = pd.read_html(url)
+    tables = pd.read_html(StringIO(response.text))
 
-    # find all the tables on the page
-    table_names_tags = soup.find_all('h2', class_= "sub-heading")
-    print("num tables: ", len(tables))
-    table_names = [tag.text.strip() for tag in table_names_tags]
-    print(table_names)
-    print("num table names: ", len(table_names))
+    table_names = [
+        tag.get_text(strip=True)
+        for tag in soup.find_all("h2", class_="sub-heading")
+    ]
 
-    # create filename based on the title of the page
-    date_time = datetime.today().strftime("%Y%m%d-%H%M%S")
-    page_name = filename + "_" + date_time
-    print("page name is:", page_name)
+    if not table_names:
+        raise ValueError(f"No statistics tables found at {url}")
 
-    # save the results to an excel file with the page name
-    with pd.ExcelWriter(page_name + ".xlsx") as writer:
-        for i, table_name in enumerate(table_names):
-            name = table_name.replace("/", "-")
-            tables[i].to_excel(writer, sheet_name=name)
+    if output_path is None:
+        date_time = datetime.today().strftime("%Y%m%d-%H%M%S")
+        output_path = Path(f"{filename}_{date_time}.xlsx")
+    else:
+        output_path = Path(output_path)
 
-    print("Table successfully exported to Excel!")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    used_names = set()
+
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for table_name, table in zip(table_names, tables):
+            exported_table = table.copy()
+            if isinstance(exported_table.columns, pd.MultiIndex):
+                exported_table.columns = [
+                    str(column[-1]).strip()
+                    for column in exported_table.columns
+                ]
+            exported_table.to_excel(
+                writer,
+                sheet_name=_sheet_name(table_name, used_names),
+                index=False,
+            )
+
+    print(f"Statistics workbook saved to {output_path}")
+    return output_path
