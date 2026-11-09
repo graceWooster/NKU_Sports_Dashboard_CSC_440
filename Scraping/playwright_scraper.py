@@ -1,70 +1,153 @@
+
 from datetime import datetime
+from io import StringIO
+from pathlib import Path
 
 import pandas as pd
 from playwright.sync_api import sync_playwright
 
-def scrape_dynamic_site(url, filename):
+
+def scrape_dynamic_site(url, filename, output_path=None):
 
     print("Initializing Playwright and launching browser...")
+
+    all_tables = []
+
     with sync_playwright() as p:
-        # Launch headless browser
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        print(f"Navigating to: {url}")
-        # Load the page and wait for network activity to settle (ensures JS-rendered data loads)
-        page.goto(url, wait_until="networkidle")
+        try:
+            print(f"Navigating to: {url}")
 
-        tab_locator = page.locator(".s-tab button")
-        tab_count = tab_locator.count()
-        print(f"Tab count: {tab_count}")
+            page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=60000
+            )
 
-        all_tables = []
-
-        for i in range(tab_count):
-            tab = tab_locator.nth(i)
-            tab_name = tab.inner_text().strip()
-
-            # Click the tab to reveal its content
-            tab.click()
-
-            # Wait a moment for the table to render or update
-            page.wait_for_timeout(1000)  # or wait for a specific table selector to appear
-
-            # Parse tables visible on the page after clicking the tab
             try:
-                tables_on_tab = pd.read_html(page.content())
-                for df in tables_on_tab:
-                    # Optionally tag or store them with their tab name
-                    all_tables.append(df)
-            except ValueError:
-                print(f"No standard HTML tables found under tab: {tab_name}")
-        browser.close()
+                page.wait_for_load_state(
+                    "networkidle",
+                    timeout=20000
+                )
+            except Exception:
+                print("Network did not become idle. Continuing...")
 
-    print("Parsing rendered HTML tables into DataFrames...")
+            page.wait_for_timeout(3000)
 
+            print("Checking for HTML tables...")
 
-    print(f"Found {len(all_tables)} table(s). Exporting to multi-sheet Excel...")
+            table_count = page.locator("table").count()
+            print(f"Tables found: {table_count}")
 
-    # create filename based on the title of the page
+            if table_count > 0:
+                try:
+                    all_tables = pd.read_html(
+                        StringIO(page.content())
+                    )
+                except ValueError:
+                    print("Could not parse page tables.")
+
+            if not all_tables:
+                tab_locator = page.locator(".s-tab button")
+                tab_count = tab_locator.count()
+
+                print(f"Tabs found: {tab_count}")
+
+                for i in range(tab_count):
+                    tab = tab_locator.nth(i)
+                    tab_name = tab.inner_text().strip()
+
+                    print(f"Checking tab: {tab_name}")
+
+                    tab.click()
+                    page.wait_for_timeout(1500)
+
+                    try:
+                        tables = pd.read_html(
+                            StringIO(page.content())
+                        )
+                        all_tables.extend(tables)
+                    except ValueError:
+                        print(f"No tables found under {tab_name}")
+
+            if not all_tables:
+                diagnostic_file = Path(f"{filename}_debug.html")
+                diagnostic_file.write_text(
+                    page.content(),
+                    encoding="utf-8"
+                )
+                print(f"No tables found. Saved: {diagnostic_file}")
+
+        finally:
+            browser.close()
+
+    print(f"Total tables collected: {len(all_tables)}")
+
+    if not all_tables:
+        print("Scraping unsuccessful. No Excel file created.")
+        return None
+
     date_time = datetime.today().strftime("%Y%m%d-%H%M%S")
-    page_name = filename + "_" + date_time
-    print("page name is:", page_name)
 
-    # Write each table into a separate sheet in a single Excel file
-    with pd.ExcelWriter(page_name, engine="openpyxl") as writer:
+    if output_path is None:
+        output_path = Path(f"{filename}_{date_time}.xlsx")
+    else:
+        output_path = Path(output_path)
+
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    # Export tables to Excel
+    with pd.ExcelWriter(
+        output_path,
+        engine="openpyxl"
+    ) as writer:
+
+        sheets_written = 0
+
         for index, df in enumerate(all_tables):
-            # Excel sheet names have a strict 31-character limit and cannot contain special characters like / or \
-            sheet_name = f"Stat_Table_{index + 1}"
 
-            # Clean up the DataFrame slightly (e.g., removing entirely empty rows/columns if any)
             df = df.dropna(how="all")
 
-            # Write the DataFrame to its own tab
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            if df.empty:
+                continue
 
-    print(f"Success! All tables saved to '{page_name}'.")
+            # Flatten multi-level column headers
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [
+                    "_".join(
+                        str(level).strip()
+                        for level in column
+                        if str(level) != "nan"
+                        and str(level).strip()
+                    )
+                    for column in df.columns
+                ]
 
+            sheet_name = f"Stats_{index + 1}"
 
-if __name__ == "__main__":
-    scrape_ysu_basketball_stats()
+            df.to_excel(
+                writer,
+                sheet_name=sheet_name,
+                index=False
+            )
+
+            sheets_written += 1
+
+        if sheets_written == 0:
+            pd.DataFrame(
+                {"Message": ["No statistics tables available"]}
+            ).to_excel(
+                writer,
+                sheet_name="No Data",
+                index=False
+            )
+
+    print(f"Success! Statistics saved to {output_path}")
+
+    return output_path
+

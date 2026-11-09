@@ -1,5 +1,12 @@
-from static_scraper import scrape_static_site
-from Scraping.playwright_scraper import scrape_dynamic_site
+import argparse
+from pathlib import Path
+
+if __package__:
+    from .static_scraper import scrape_static_site
+else:
+    from static_scraper import scrape_static_site
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 school_configs = {
     "detroit": {
@@ -64,10 +71,58 @@ school_configs = {
     }
 }
 
-user_choice = "detroit"
-config = school_configs[user_choice]
 
-if config["type"] == "static":
-    scrape_static_site(config["url"], config["prefix"])
-else:
-    scrape_dynamic_site(config["url"], config["prefix"])
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Scrape configured school basketball statistics."
+    )
+
+    parser.add_argument(
+        "school",
+        choices=["all"] + list(school_configs.keys()),
+        nargs="?",
+        default="all",
+        help="School to scrape, or all schools."
+    )
+
+    args = parser.parse_args()
+
+    schools_to_scrape = (
+        school_configs.items()
+        if args.school == "all"
+        else [(args.school, school_configs[args.school])]
+    )
+
+    for school, config in schools_to_scrape:
+        print(f"\nScraping {school}...")
+
+        output_path = BASE_DIR / f"{school}_stats.xlsx"
+
+        try:
+            if config["type"] == "static":
+                scrape_static_site(
+                    config["url"],
+                    config["prefix"],
+                    output_path
+                )
+            else:
+                if __package__:
+                    from .playwright_scraper import scrape_dynamic_site
+                else:
+                    from playwright_scraper import scrape_dynamic_site
+
+                scrape_dynamic_site(
+                    config["url"],
+                    config["prefix"],
+                    output_path
+                )
+
+            print(f"Finished scraping {school}")
+
+        except Exception as error:
+            print(f"Failed to scrape {school}: {error}")
+
+
+if __name__ == "__main__":
+    main()
