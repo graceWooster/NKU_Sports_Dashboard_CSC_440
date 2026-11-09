@@ -25,20 +25,22 @@ const LEADERS = [
   { key: 'assists', label: 'Assist leader', unit: 'AST' },
 ]
 
+
 const SCHOOLS = [
   { id: 'detroit', name: 'Detroit Mercy', dataAvailable: true },
   { id: 'nku', name: 'Northern Kentucky', dataAvailable: true },
-  { id: 'gbp', name: 'Green Bay' },
-  { id: 'csu', name: 'Cleveland State' },
-  { id: 'iui', name: 'IU Indianapolis' },
-  { id: 'mke', name: 'Milwaukee' },
-  { id: 'niu', name: 'Northern Illinois' },
-  { id: 'oakland', name: 'Oakland' },
-  { id: 'rmu', name: 'Robert Morris' },
-  { id: 'wsu', name: 'Wright State' },
-  { id: 'pfu', name: 'Purdue Fort Wayne' },
-  { id: 'ysu', name: 'Youngstown State' },
+  { id: 'gbp', name: 'Green Bay', dataAvailable: true },
+  { id: 'csu', name: 'Cleveland State', dataAvailable: true },
+  { id: 'iui', name: 'IU Indianapolis', dataAvailable: true },
+  { id: 'mke', name: 'Milwaukee', dataAvailable: true },
+  { id: 'niu', name: 'Northern Illinois', dataAvailable: true },
+  { id: 'oakland', name: 'Oakland', dataAvailable: true },
+  { id: 'rmu', name: 'Robert Morris', dataAvailable: true },
+  { id: 'wsu', name: 'Wright State', dataAvailable: true },
+  { id: 'pfu', name: 'Purdue Fort Wayne', dataAvailable: true },
+  { id: 'ysu', name: 'Youngstown State', dataAvailable: true },
 ]
+
 
 function formatStat(value, key) {
   if (value === null || value === undefined || value === '') {
