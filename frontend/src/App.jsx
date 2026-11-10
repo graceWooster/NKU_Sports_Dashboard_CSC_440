@@ -17,6 +17,15 @@ const PLAYER_STATS = [
   { key: 'points', label: 'Points' },
 ]
 
+const TEAM_STATS = [
+  { key: 'points_per_game', label: 'Points per game' },
+  { key: 'rebounds_per_game', label: 'Rebounds per game' },
+  { key: 'assists_per_game', label: 'Assists per game' },
+  { key: 'field_goal_percentage', label: 'Field goal percentage' },
+  { key: 'three_point_percentage', label: 'Three-point percentage' },
+  { key: 'free_throw_percentage', label: 'Free-throw percentage' },
+]
+
 const EMPTY_PLAYERS = []
 
 const LEADERS = [
@@ -61,6 +70,64 @@ function formatStat(value, key) {
     : numericValue.toFixed(1)
 }
 
+function StatSelector({ title, stats, selectedStats, onChange }) {
+  const toggleStat = (key) => {
+    onChange((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key],
+    )
+  }
+
+  return (
+    <section
+      className="stat-visibility-panel"
+      style={{
+        margin: '1rem 0',
+        padding: '1rem',
+        border: '1px solid #d8dee8',
+        borderRadius: '10px',
+        background: '#ffffff',
+      }}
+    >
+      <h3 style={{ marginTop: 0 }}>{title}</h3>
+      <div
+        className="stat-checkboxes"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '0.65rem 1rem',
+        }}
+      >
+        {stats.map(({ key, label }) => (
+          <label
+            key={key}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <input
+              type="checkbox"
+              checked={selectedStats.includes(key)}
+              onChange={() => toggleStat(key)}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+        <button type="button" onClick={() => onChange(stats.map((stat) => stat.key))}>
+          Select All
+        </button>
+        <button type="button" onClick={() => onChange([])}>
+          Clear All
+        </button>
+      </div>
+      <p className="data-note" style={{ marginBottom: 0 }}>
+        {selectedStats.length} of {stats.length} statistics selected.
+      </p>
+    </section>
+  )
+}
+
 function App() {
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [selectedSchoolId, setSelectedSchoolId] = useState('nku')
@@ -82,6 +149,12 @@ function App() {
   const [sortKey, setSortKey] = useState('points')
   const [sortDirection, setSortDirection] = useState('desc')
   const [comparisonNumbers, setComparisonNumbers] = useState(['', ''])
+  const [visiblePlayerStats, setVisiblePlayerStats] = useState(
+    PLAYER_STATS.map((stat) => stat.key),
+  )
+  const [visibleTeamStats, setVisibleTeamStats] = useState(
+    TEAM_STATS.map((stat) => stat.key),
+  )
 
   const selectedSchool = SCHOOLS.find(
     (school) => school.id === selectedSchoolId,
@@ -265,7 +338,7 @@ function App() {
 
         <h3>Season Statistics</h3>
         <div className="stats-grid player-stat-grid">
-          {PLAYER_STATS.map(({ key, label }) => (
+          {PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).map(({ key, label }) => (
             <div className="stat-card" key={key}>
               <span>{label}</span>
               <strong>{formatStat(selectedPlayer[key], key)}</strong>
@@ -312,6 +385,13 @@ function App() {
           </label>
         </div>
 
+        <StatSelector
+          title="Customize Player Statistics"
+          stats={PLAYER_STATS}
+          selectedStats={visiblePlayerStats}
+          onChange={setVisiblePlayerStats}
+        />
+
         <div className="table-scroll">
           <table className="player-stats-table">
             <thead>
@@ -322,7 +402,7 @@ function App() {
                 <th scope="col" aria-sort={sortKey === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
                   <button className="sort-button" onClick={() => handleSort('name')}>Player</button>
                 </th>
-                {PLAYER_STATS.map(({ key, label }) => (
+                {PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).map(({ key, label }) => (
                   <th
                     scope="col"
                     key={key}
@@ -350,14 +430,14 @@ function App() {
                       {player.name ?? 'Name unavailable'}
                     </button>
                   </th>
-                  {PLAYER_STATS.map(({ key }) => (
+                  {PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).map(({ key }) => (
                     <td key={key}>{formatStat(player[key], key)}</td>
                   ))}
                 </tr>
               ))}
               {filteredPlayers.length === 0 && (
                 <tr>
-                  <td colSpan={PLAYER_STATS.length + 2}>No players match those filters.</td>
+                  <td colSpan={PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).length + 2}>No players match those filters.</td>
                 </tr>
               )}
             </tbody>
@@ -406,7 +486,7 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {PLAYER_STATS.map(({ key, label }) => (
+                  {PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).map(({ key, label }) => (
                     <tr key={key}>
                       <th scope="row">{label}</th>
                       {comparisonPlayers.map((player) => (
@@ -438,15 +518,6 @@ function App() {
       return <p>No team statistics are available.</p>
     }
 
-    const teamCards = [
-      { key: 'points_per_game', label: 'Points per game' },
-      { key: 'rebounds_per_game', label: 'Rebounds per game' },
-      { key: 'assists_per_game', label: 'Assists per game' },
-      { key: 'field_goal_percentage', label: 'Field goal percentage' },
-      { key: 'three_point_percentage', label: 'Three-point percentage' },
-      { key: 'free_throw_percentage', label: 'Free-throw percentage' },
-    ]
-
     const leaders = LEADERS.map((leader) => ({
       ...leader,
       player: players.reduce((best, player) =>
@@ -458,8 +529,14 @@ function App() {
 
     return (
       <>
+        <StatSelector
+          title="Customize Team Statistics"
+          stats={TEAM_STATS}
+          selectedStats={visibleTeamStats}
+          onChange={setVisibleTeamStats}
+        />
         <div className="stats-grid">
-          {teamCards.map(({ key, label }) => (
+          {TEAM_STATS.filter(({ key }) => visibleTeamStats.includes(key)).map(({ key, label }) => (
             <div className="stat-card" key={key}>
               <span>{label}</span>
               <strong>{formatStat(teamStats[key], key)}</strong>
