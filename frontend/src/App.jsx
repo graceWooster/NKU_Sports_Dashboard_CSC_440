@@ -128,6 +128,33 @@ function StatSelector({ title, stats, selectedStats, onChange }) {
   )
 }
 
+function LoadingMessage({ message }) {
+  return (
+    <div className="empty-state" role="status" aria-live="polite">
+      <p>{message}</p>
+    </div>
+  )
+}
+
+function ErrorMessage({ message, onRetry }) {
+  return (
+    <div className="empty-state" role="alert">
+      <h3>Something went wrong</h3>
+      <p>{message}</p>
+      <button type="button" onClick={onRetry}>Try Again</button>
+    </div>
+  )
+}
+
+function EmptyMessage({ title, message }) {
+  return (
+    <div className="empty-state" role="status">
+      <h3>{title}</h3>
+      <p>{message}</p>
+    </div>
+  )
+}
+
 function App() {
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [selectedSchoolId, setSelectedSchoolId] = useState('nku')
@@ -155,6 +182,23 @@ function App() {
   const [visibleTeamStats, setVisibleTeamStats] = useState(
     TEAM_STATS.map((stat) => stat.key),
   )
+  const [retryCount, setRetryCount] = useState(0)
+
+  const handleRetry = () => {
+    setPlayerData((current) => ({
+      ...current,
+      schoolId: selectedSchoolId,
+      error: '',
+      loading: true,
+    }))
+    setTeamData((current) => ({
+      ...current,
+      schoolId: selectedSchoolId,
+      error: '',
+      loading: true,
+    }))
+    setRetryCount((count) => count + 1)
+  }
 
   const selectedSchool = SCHOOLS.find(
     (school) => school.id === selectedSchoolId,
@@ -262,7 +306,7 @@ function App() {
       })
 
     return () => controller.abort()
-  }, [selectedSchool.dataAvailable, selectedSchoolId])
+  }, [selectedSchool.dataAvailable, selectedSchoolId, retryCount])
 
   const handlePageChange = (page) => {
     setCurrentPage(page)
@@ -285,14 +329,15 @@ function App() {
 
     if (apiError) {
       return (
-        <p className="sidebar-description" role="alert">
-          Unable to load players. Please try again later.
-        </p>
+        <div className="sidebar-description" role="alert">
+          <p>Unable to load the player roster.</p>
+          <button type="button" onClick={handleRetry}>Try Again</button>
+        </div>
       )
     }
 
     if (players.length === 0) {
-      return <p className="sidebar-description">No player data available yet.</p>
+      return <p className="sidebar-description">No player data is available for this school yet.</p>
     }
 
     return players.map((player, index) => (
@@ -313,6 +358,28 @@ function App() {
   }
 
   const renderPlayerDetails = () => {
+    if (isLoading) {
+      return <LoadingMessage message={`Loading ${selectedSchool.name} player data...`} />
+    }
+
+    if (apiError) {
+      return (
+        <ErrorMessage
+          message="We couldn't retrieve the player roster. Check that the Django backend is running, then try again."
+          onRetry={handleRetry}
+        />
+      )
+    }
+
+    if (players.length === 0) {
+      return (
+        <EmptyMessage
+          title="No player data available"
+          message={`There are currently no player records to display for ${selectedSchool.name}.`}
+        />
+      )
+    }
+
     if (!selectedPlayer) {
       return (
         <div className="empty-state">
@@ -352,11 +419,25 @@ function App() {
 
   const renderPlayersPage = () => {
     if (isLoading) {
-      return <p>Loading players...</p>
+      return <LoadingMessage message={`Loading ${selectedSchool.name} players...`} />
     }
 
     if (apiError) {
-      return <p role="alert">Unable to load players: {apiError}</p>
+      return (
+        <ErrorMessage
+          message="We couldn't retrieve the player list. Check that the Django backend is running, then try again."
+          onRetry={handleRetry}
+        />
+      )
+    }
+
+    if (players.length === 0) {
+      return (
+        <EmptyMessage
+          title="No players found"
+          message={`No player records are currently available for ${selectedSchool.name}.`}
+        />
+      )
     }
 
     return (
@@ -437,7 +518,7 @@ function App() {
               ))}
               {filteredPlayers.length === 0 && (
                 <tr>
-                  <td colSpan={PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).length + 2}>No players match those filters.</td>
+                  <td colSpan={PLAYER_STATS.filter(({ key }) => visiblePlayerStats.includes(key)).length + 2}>No players match your search or minimum-games filter. Try changing or clearing the filters.</td>
                 </tr>
               )}
             </tbody>
@@ -507,15 +588,25 @@ function App() {
 
   const renderStatisticsPage = () => {
     if (isTeamStatsLoading) {
-      return <p>Loading team statistics...</p>
+      return <LoadingMessage message={`Loading ${selectedSchool.name} team statistics...`} />
     }
 
     if (teamStatsError) {
-      return <p role="alert">Unable to load team statistics: {teamStatsError}</p>
+      return (
+        <ErrorMessage
+          message="We couldn't retrieve team statistics. Check that the Django backend is running, then try again."
+          onRetry={handleRetry}
+        />
+      )
     }
 
     if (!teamStats) {
-      return <p>No team statistics are available.</p>
+      return (
+        <EmptyMessage
+          title="No team statistics available"
+          message={`There are currently no team statistics to display for ${selectedSchool.name}.`}
+        />
+      )
     }
 
     const leaders = LEADERS.map((leader) => ({
