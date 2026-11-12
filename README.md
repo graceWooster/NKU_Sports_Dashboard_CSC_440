@@ -15,17 +15,12 @@ cd frontend
 npm run dev
 ```
 
-Open the URL printed by Vite, usually `http://localhost:5173`.
-
-## Refresh Detroit Mercy statistics
-
-From the repository root, run:
-
+If this is your first time running the server:
+- make sure you are in the frontend folder(`NKU-Sports-Dashboard-CSC-440\frontend`), then run:
 ```bash
-.venv/bin/python -m Scraping.scrape_pages detroit
+npm install
 ```
 
-The scraper writes `detroit_stats.xlsx` to the repository root. The dashboard
-loads it when Detroit Mercy is selected. Northern Kentucky data is read from
-`norse_stats.xlsx`. Other schools appear in the selector but do not have
-workbooks connected to the API yet.
+Open the URL printed by Vite, usually `http://localhost:5173`.
+
+
