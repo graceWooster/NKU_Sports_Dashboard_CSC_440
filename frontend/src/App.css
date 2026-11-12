@@ -634,8 +634,21 @@ button {
   cursor: pointer;
 }
 
-.sort-button:hover {
+.sort-button-icon {
+  opacity: 0;
+  margin-left: 0;
+  overflow: hidden;
+  transition: all 0.1s ease;
+}
+
+.sort-button:hover{
   text-decoration: underline;
+}
+
+.sort-button:hover .sort-button-icon{
+  opacity: 1;
+  margin-left: 8px;
+  margin-top: 3px;
 }
 
 .comparison-section,
