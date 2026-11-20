@@ -8,6 +8,11 @@ From the repository root, start the Django API:
 .venv/bin/python manage.py runserver 8001
 ```
 
+Depending on where your virtual environment is, you may need to run:
+```bash
+python manage.py runserver 8001
+```
+
 In a second terminal, start the React frontend:
 
 ```bash
@@ -15,7 +20,7 @@ cd frontend
 npm run dev
 ```
 
-If this is your first time running the server:
+If this is your first time running the server, you will need to install the build first.
 - make sure you are in the frontend folder(`NKU-Sports-Dashboard-CSC-440\frontend`), then run:
 ```bash
 npm install
