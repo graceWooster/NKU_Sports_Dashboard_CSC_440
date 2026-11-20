@@ -635,8 +635,8 @@ button {
 }
 
 .sort-button-icon {
-  opacity: 0;
-  margin-left: 0;
+  opacity: .1;
+  margin-left: 8px;
   overflow: hidden;
   transition: all 0.1s ease;
 }
@@ -647,8 +647,6 @@ button {
 
 .sort-button:hover .sort-button-icon{
   opacity: 1;
-  margin-left: 8px;
-  margin-top: 3px;
 }
 
 .comparison-section,
